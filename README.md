@@ -3,7 +3,8 @@
 Turn an [M5Stack Fire](https://docs.m5stack.com/en/core/fire) (ESP32) into an ambient
 status display for [Claude Code](https://claude.com/claude-code). A dancing 8-bit
 Space Invaders alien on the LCD reflects what Claude is doing in real time — marching
-while it thinks, hopping while it works, victory-jumping when it finishes.
+while it thinks, hopping while it works, victory-jumping when it finishes. The Fire's
+built-in RGB LED bars glow along in matching colors.
 
 State is pushed to the device over plain HTTP, so anything that can `curl` can drive it.
 
@@ -19,13 +20,16 @@ tracks each session automatically.
 
 ## States
 
-| State | Animation | Color |
-|-----------|-------------------------------------------|--------|
-| `idle`    | gentle bob, slow leg shuffle              | cyan   |
-| `thinking`| marches side to side                      | orange |
-| `working` | full dance: struts, hops, squash & stretch| orange |
-| `waiting` | tense heartbeat pulse                     | amber  |
-| `done`    | victory jumps, then auto-reverts to idle  | green  |
+| State | Alien animation | LED bars | Color |
+|-----------|-------------------------------------------|----------------------------|--------|
+| `idle`    | gentle bob, slow leg shuffle              | slow breathe               | cyan   |
+| `thinking`| marches side to side                      | comet sweeps back and forth| orange |
+| `working` | full dance: struts, hops, squash & stretch| fast pulse                 | orange |
+| `waiting` | tense heartbeat pulse                     | heartbeat throb            | amber  |
+| `done`    | victory jumps, then auto-reverts to idle  | decaying victory burst     | green  |
+
+The screen and the 10 built-in SK6812 LEDs (two side bars, GPIO 15) are driven from the
+same per-state palette, so their color and motion always match.
 
 A firmware watchdog relaxes `thinking`/`working` back to `idle` after ~12s with no update,
 so the display can never get stuck.
@@ -48,8 +52,8 @@ On boot the serial log prints the device IP and mDNS name:
 CLAUDE-FIRE ONLINE  ->  http://192.168.1.230/
 ```
 
-`M5GFX` and `espressif/mdns` are pulled automatically from the component registry on
-first build (into `managed_components/`, which is gitignored).
+`M5GFX`, `espressif/mdns`, and `espressif/led_strip` are pulled automatically from the
+component registry on first build (into `managed_components/`, which is gitignored).
 
 ## Control it over HTTP
 
@@ -75,7 +79,7 @@ down or fails a session if the device is off.
 ## Layout
 
 ```
-main/claude_companion.cpp     firmware: WiFi, HTTP server, alien animation
+main/claude_companion.cpp     firmware: WiFi, HTTP server, alien animation, LED bars
 main/wifi_secrets.h.example   template for your (gitignored) credentials
 sdkconfig.defaults            board config: 16MB flash, 8MB PSRAM, esp32 target
 scripts/claude-fire.sh        host-side fire-and-forget notifier

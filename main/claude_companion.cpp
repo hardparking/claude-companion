@@ -24,6 +24,7 @@
 #include "nvs_flash.h"
 #include "esp_http_server.h"
 #include "mdns.h"
+#include "led_strip.h"
 
 #include <M5GFX.h>
 
@@ -41,6 +42,25 @@ static const char *TAG = "claude_fire";
 // ---- display ----------------------------------------------------------------
 static M5GFX display;
 static M5Canvas canvas(&display);     // 240x240 off-screen back-buffer
+
+// ---- on-board LED bars ------------------------------------------------------
+// The M5Stack Fire has 10 SK6812 RGB LEDs (two side bars of 5) on GPIO 15.
+// We mirror the screen state onto them: same per-state color, matching motion.
+#define LED_GPIO    15
+#define LED_COUNT   10
+#define LED_MAX     0.35f             // global brightness cap (these bars are bright)
+static led_strip_handle_t g_leds = nullptr;
+
+// Light every LED to one color scaled by `bright` (0..1). SK6812 wants GRB,
+// which the strip is configured for, so we pass plain R,G,B here.
+static void led_fill(uint32_t rgb, float bright) {
+  if (!g_leds) return;
+  bright *= LED_MAX;
+  uint8_t r = (uint8_t)(((rgb >> 16) & 0xFF) * bright);
+  uint8_t g = (uint8_t)(((rgb >> 8) & 0xFF) * bright);
+  uint8_t b = (uint8_t)((rgb & 0xFF) * bright);
+  for (int i = 0; i < LED_COUNT; i++) led_strip_set_pixel(g_leds, i, r, g, b);
+}
 
 // ---- 8-bit invader sprite ---------------------------------------------------
 // Classic 11x8 "crab" invader, two animation frames for the leg/arm shuffle.
@@ -192,14 +212,86 @@ static void draw_frame(float secs) {
   canvas.pushSprite((display.width() - 240) / 2, (display.height() - 240) / 2);
 }
 
+// Mirror the current state onto the LED bars. Colors match draw_frame's palette;
+// each state gets motion that echoes the alien's: idle breathes, thinking sweeps
+// a dot along the bar, working pulses fast, waiting throbs on the heartbeat, done
+// flashes a decaying victory burst. State/watchdog transitions are owned by
+// draw_frame (which runs first each frame), so we just read g_state here.
+static void update_leds(float secs) {
+  if (!g_leds) return;
+  int s = g_state.load();
+  uint32_t since = now_ms() - g_state_since_ms.load();
+
+  switch (s) {
+    case ST_IDLE: {                                // slow cyan breathe
+      float b = 0.10f + 0.18f * (0.5f + 0.5f * sinf(secs * 2.0f));
+      led_fill(0x4FB0C0, b);
+      break;
+    }
+    case ST_THINKING: {                            // orange dot sweeping the bar
+      led_fill(0xD97757, 0.05f);
+      float pos = fmodf(secs * 1.7f, 2.0f);        // 0..2 -> ping-pong over 0..9
+      pos = pos < 1.0f ? pos : 2.0f - pos;
+      float head = pos * (LED_COUNT - 1);
+      for (int i = 0; i < LED_COUNT; i++) {
+        float d = i - head;
+        float glow = g_bump(d, 0.7f);              // soft comet around the head
+        if (glow > 0.02f) led_strip_set_pixel(g_leds, i,
+            (uint8_t)(0xD9 * glow * LED_MAX),
+            (uint8_t)(0x77 * glow * LED_MAX),
+            (uint8_t)(0x57 * glow * LED_MAX));
+      }
+      break;
+    }
+    case ST_WORKING: {                             // fast orange pulse, full bar
+      float b = 0.45f + 0.55f * fabsf(sinf(secs * 7.5f));
+      led_fill(0xF59030, b);
+      break;
+    }
+    case ST_WAITING: {                             // amber heartbeat throb
+      float b = 0.10f + 0.55f * heartbeat(secs);
+      led_fill(0xFFC166, b > 1.f ? 1.f : b);
+      break;
+    }
+    case ST_DONE: {                                // decaying green victory burst
+      float ph = since / 1000.f;
+      float b = expf(-ph * 2.6f) * (0.5f + 0.5f * fabsf(sinf(ph * 11.f)));
+      led_fill(0x7ED98A, 0.08f + 0.92f * b);
+      break;
+    }
+  }
+  led_strip_refresh(g_leds);
+}
+
+static void led_start(void) {
+  led_strip_config_t scfg = {};
+  scfg.strip_gpio_num = LED_GPIO;
+  scfg.max_leds = LED_COUNT;
+  scfg.led_model = LED_MODEL_SK6812;
+  scfg.led_pixel_format = LED_PIXEL_FORMAT_GRB;
+  led_strip_rmt_config_t rcfg = {};
+  rcfg.clk_src = RMT_CLK_SRC_DEFAULT;
+  rcfg.resolution_hz = 10 * 1000 * 1000;          // 10 MHz, standard for SK6812
+  if (led_strip_new_rmt_device(&scfg, &rcfg, &g_leds) != ESP_OK) {
+    ESP_LOGE(TAG, "led strip init failed");
+    g_leds = nullptr;
+    return;
+  }
+  led_strip_clear(g_leds);
+}
+
 static void anim_task(void *arg) {
   canvas.setColorDepth(16);
   canvas.setPsram(true);
   if (!canvas.createSprite(240, 240)) { ESP_LOGE(TAG, "canvas alloc failed"); vTaskDelete(NULL); }
 
+  led_start();
+
   uint32_t t0 = now_ms();
   while (true) {
-    draw_frame((now_ms() - t0) / 1000.f);
+    float secs = (now_ms() - t0) / 1000.f;
+    draw_frame(secs);
+    update_leds(secs);
     vTaskDelay(pdMS_TO_TICKS(30));   // ~33 fps
   }
 }
