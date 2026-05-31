@@ -54,6 +54,9 @@ All firmware lives in a single file: **`main/claude_companion.cpp`**. The big pi
 - **Rendering** draws the classic 11×8 invader bitmap (two leg-shuffle frames) scaled up into a
   240×240 sprite backed by PSRAM, then pushes it centered to the LCD. Each state has its own color
   and motion (bob, side-to-side march, hop/squash-stretch dance, heartbeat pulse, victory jumps).
+- **LED bars** mirror the screen: the Fire's 10 built-in SK6812 RGB LEDs (GPIO 15, driven via the
+  `espressif/led_strip` RMT component) are updated each frame in the same animation task, reusing the
+  per-state palette so their color/effect tracks the alien. Brightness is capped via `LED_MAX`.
 - **mDNS** advertises the device as `claude-fire.local` so the host script never needs a fixed IP.
 
 ### Host integration (outside the firmware)
