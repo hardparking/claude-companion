@@ -1,0 +1,4 @@
+# claude_companion — M5Stack Fire AI companion
+cmake_minimum_required(VERSION 3.16)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(claude_companion)

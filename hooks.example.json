@@ -1,0 +1,23 @@
+{
+  "_comment": "Merge the hooks block below into ~/.claude/settings.json to drive the Fire from Claude Code. Assumes scripts/claude-fire.sh is copied to ~/.claude/claude-fire.sh and made executable.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "~/.claude/claude-fire.sh idle" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "~/.claude/claude-fire.sh thinking" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "~/.claude/claude-fire.sh working" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "hooks": [ { "type": "command", "command": "~/.claude/claude-fire.sh thinking" } ] }
+    ],
+    "Notification": [
+      { "hooks": [ { "type": "command", "command": "~/.claude/claude-fire.sh waiting" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "~/.claude/claude-fire.sh done" } ] }
+    ]
+  }
+}

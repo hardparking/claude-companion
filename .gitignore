@@ -1,0 +1,18 @@
+# ESP-IDF build output
+/build/
+
+# Managed components are fetched from the component registry on build
+/managed_components/
+/dependencies.lock
+
+# Generated sdkconfig (sdkconfig.defaults is the source of truth)
+/sdkconfig
+/sdkconfig.old
+
+# Local secrets — never commit real WiFi credentials
+main/wifi_secrets.h
+
+# Editor / OS cruft
+.vscode/
+*.swp
+.DS_Store

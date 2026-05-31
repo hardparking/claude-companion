@@ -1,0 +1,4 @@
+dependencies:
+  idf: ">=5.0"
+  m5stack/M5GFX: ">=0.1.16"
+  espressif/mdns: "^1.2.0"
